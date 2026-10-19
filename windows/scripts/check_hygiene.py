@@ -7,8 +7,10 @@ import sys
 
 MAX_LINES = 600
 SOURCE_SUFFIXES = (".rs", ".py", ".ps1", ".js", ".css", ".html")
-# User-profile paths that identify a developer machine.
-LOCAL_PATH = re.compile(r"[A-Za-z]:\\{1,2}Users\\{1,2}[A-Za-z0-9._-]+|/Users/[A-Za-z0-9._-]+/")
+# User-profile paths that identify a developer machine. Built from parts so
+# this file does not itself contain such a path.
+HOME = "Users"
+LOCAL_PATH = re.compile(rf"[A-Za-z]:\\{{1,2}}{HOME}\\{{1,2}}[A-Za-z0-9._-]+|/{HOME}/[A-Za-z0-9._-]+/")
 EXEMPT = ("app/ui/i18n.js",)
 
 

@@ -23,6 +23,8 @@ CJK_ALLOWLIST = {
     "site/index.html",  # Language switcher on the English website (#160).
     "site/zh/index.html",  # Simplified Chinese website (#160).
     "site/404.html",  # Bilingual not-found page of the website (#160).
+    "windows/README.zh-CN.md",  # Simplified Chinese README of the Windows edition.
+    "windows/app/ui/i18n.js",  # English and Simplified Chinese UI strings of the Windows edition.
     "docs/glossary.md",  # Chinese UI terms alongside English glossary prose (#67).
     "Sources/AskKeyAppKit/Resources/zh-Hans.lproj/InfoPlist.strings",  # Localized product name.
     "Tests/AskKeyAppTests/AgentClientConnectionPolicyTests.swift",  # Chinese client connection errors.

@@ -1,12 +1,12 @@
 # Ask Key for Windows
 
-[简体中文](README.zh-CN.md)
+[Read this in Simplified Chinese](README.zh-CN.md)
 
 Give AI agents your passwords and API keys without giving them away.
 
 Ask Key keeps credentials encrypted on your PC. Agents such as Claude Code, Codex and Cursor can see each credential's name and its intended use. They cannot read the values. When an agent needs one, it asks Ask Key to run a command. You approve the request with Windows Hello, and Ask Key starts the program with the value in its environment. The agent gets the exit status, and with the CLI, the program's output. It never gets the stored value from Ask Key itself.
 
-This is a Windows reimplementation of [AskKey for macOS](https://github.com/sudoHG/AskKey) in Rust and Tauri.
+This is a Windows reimplementation of AskKey in Rust and Tauri. It lives in `windows/` of the [AskKey repository](https://github.com/sudoHG/AskKey) and is developed independently of the macOS App.
 
 ## Download
 
