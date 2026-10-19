@@ -8,6 +8,10 @@ Ask Key keeps credentials encrypted on your PC. Agents such as Claude Code, Code
 
 This is a Windows reimplementation of [AskKey for macOS](https://github.com/sudoHG/AskKey) in Rust and Tauri.
 
+## Download
+
+Get the MSI from [Releases](https://github.com/WENGENG-boop/AskKey-Windows/releases/latest). This is a preview: the installer is unsigned, so SmartScreen will warn (More info → Run anyway). It needs Windows 10 22H2 or 11 (x64) and Windows Hello (a PIN is enough).
+
 ## How it works
 
 - **One permission per credential.** *Ask* (the default) needs your approval every time. *Allow* lets agents use it without asking. *Hidden* keeps agents from seeing it.

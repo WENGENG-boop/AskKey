@@ -8,6 +8,10 @@ Ask Key 在你的电脑上加密保存凭据。Claude Code、Codex、Cursor 等�
 
 这是 [AskKey macOS 版](https://github.com/sudoHG/AskKey) 的 Windows 重写版，使用 Rust 和 Tauri。
 
+## 下载
+
+从 [Releases](https://github.com/WENGENG-boop/AskKey-Windows/releases/latest) 下载 MSI 安装包。目前是预览版，安装包没有签名，SmartScreen 会提示风险（点“更多信息”→“仍要运行”）。需要 Windows 10 22H2 或 Windows 11（x64），以及 Windows Hello（设置 PIN 即可）。
+
 ## 工作方式
 
 - **每个凭据一个权限。** “询问”（默认）每次都要你批准；“允许”让智能体无需询问即可使用；“隐藏”让智能体看不到它。
