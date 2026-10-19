@@ -1,0 +1,83 @@
+.dialog {
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--text);
+  padding: 0;
+  width: min(680px, calc(100vw - 32px));
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
+}
+
+.dialog::backdrop {
+  background: rgba(20, 18, 16, 0.4);
+}
+
+.editor {
+  padding: 20px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.editor h2 {
+  margin: 0 0 4px;
+  font-size: 17px;
+}
+
+.editor label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.editor label > input,
+.editor label > select,
+.editor label > textarea {
+  color: var(--text);
+  font-size: 14px;
+}
+
+.editor label.narrow {
+  max-width: 220px;
+}
+
+.two {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+fieldset {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+legend {
+  font-size: 12.5px;
+  color: var(--muted);
+  padding: 0 4px;
+}
+
+.component-head,
+.component-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1.3fr auto;
+  gap: 6px;
+  align-items: center;
+}
+
+.components {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.secret {
+  user-select: all;
+}

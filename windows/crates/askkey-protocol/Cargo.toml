@@ -1,0 +1,13 @@
+[package]
+name = "askkey-protocol"
+description = "Broker wire types, framing and limits shared by the Ask Key App and helper."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+sha2.workspace = true
+hex.workspace = true

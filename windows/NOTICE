@@ -1,0 +1,8 @@
+Ask Key for Windows
+Copyright (c) 2026 Yizheng Weng
+
+This is a Windows reimplementation of AskKey (https://github.com/sudoHG/AskKey),
+Copyright (c) 2026 sudoHG, licensed under the MIT License. It follows AskKey's
+product design, permission model and Broker protocol; no Swift source is
+copied. The application icon is taken from AskKey; its license is in
+third_party/AskKey-LICENSE.

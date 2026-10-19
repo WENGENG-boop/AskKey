@@ -1,0 +1,4 @@
+/target/
+/app/gen/
+/app/binaries/
+*.askkey-tmp
