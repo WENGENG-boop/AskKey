@@ -1,0 +1,13 @@
+[package]
+name = "askkey-system"
+description = "Windows primitives for Ask Key: DPAPI, private ACLs, job-object process launch and handle duplication."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+thiserror.workspace = true
+windows-sys.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

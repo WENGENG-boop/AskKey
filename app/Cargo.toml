@@ -1,0 +1,29 @@
+[package]
+name = "askkey-app"
+description = "Ask Key for Windows: credential management, approvals and the local Broker."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+askkey-protocol.workspace = true
+askkey-system.workspace = true
+askkey-vault.workspace = true
+askkey-broker.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+zeroize.workspace = true
+toml_edit = "0.22"
+tauri = { version = "2", features = ["tray-icon"] }
+windows-future = "0.2"
+windows = { version = "0.61", features = [
+    "Foundation",
+    "Security_Credentials_UI",
+    "Win32_Foundation",
+    "Win32_System_WinRT",
+    "Win32_UI_WindowsAndMessaging",
+] }

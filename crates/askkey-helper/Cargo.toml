@@ -1,0 +1,18 @@
+[package]
+name = "askkey-helper"
+description = "The askkey helper: CLI and MCP stdio front end that forwards requests to the Ask Key Broker."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "askkey"
+path = "src/main.rs"
+
+[dependencies]
+askkey-protocol.workspace = true
+askkey-system.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+uuid.workspace = true
+windows-sys.workspace = true

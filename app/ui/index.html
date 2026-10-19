@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Ask Key</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="editor.css">
+  <script src="i18n.js" defer></script>
+  <script src="app.js" defer></script>
+  <script src="editor.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <img src="icon.png" alt="" class="brand-icon">
+      <span class="brand-name">Ask Key</span>
+      <span id="dev-badge" class="badge badge-dev" hidden></span>
+    </div>
+    <div class="topbar-actions">
+      <button id="access-toggle" class="pill" type="button"></button>
+      <button id="lock-button" class="ghost" type="button" hidden></button>
+    </div>
+  </header>
+  <div class="layout">
+    <nav class="sidebar" id="nav"></nav>
+    <main id="view" class="view" tabindex="-1"></main>
+  </div>
+  <dialog id="editor" class="dialog"></dialog>
+  <dialog id="reveal" class="dialog"></dialog>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+</body>
+</html>

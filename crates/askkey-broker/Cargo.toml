@@ -1,0 +1,19 @@
+[package]
+name = "askkey-broker"
+description = "The Ask Key Broker: approval state machine, runtime delivery and the named-pipe server."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+askkey-protocol.workspace = true
+askkey-system.workspace = true
+tokio.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+rand.workspace = true
+hex.workspace = true
+zeroize.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
