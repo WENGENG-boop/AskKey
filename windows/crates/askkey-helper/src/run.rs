@@ -13,6 +13,7 @@ use askkey_protocol::{
 };
 
 use crate::client::{self, ClientError, Connection};
+use crate::stdin::StdinRelay;
 
 pub struct RunOptions {
     pub credentials: Vec<String>,
@@ -52,7 +53,7 @@ fn copy_thread<R: Read + Send + 'static, W: Write + Send + 'static>(
 
 /// Sends one run request with fresh stream pipes and relays the target's
 /// output until it exits.
-fn run_once(request: &RunRequest) -> Result<RunResult, ClientError> {
+fn run_once(request: &RunRequest, stdin: &StdinRelay) -> Result<RunResult, ClientError> {
     let pipe = || askkey_system::anonymous_pipe().map_err(ClientError::Io);
     let (child_stdin, stdin_writer) = pipe()?;
     let (stdout_reader, child_stdout) = pipe()?;
@@ -65,15 +66,22 @@ fn run_once(request: &RunRequest) -> Result<RunResult, ClientError> {
         stderr: value(&child_stderr),
     });
 
-    // Not joined: a read of an idle console would block forever.
-    copy_thread(std::io::stdin(), std::fs::File::from(stdin_writer));
+    let input = stdin.attach(std::fs::File::from(stdin_writer));
     let stdout = copy_thread(std::fs::File::from(stdout_reader), std::io::stdout());
     let stderr = copy_thread(std::fs::File::from(stderr_reader), std::io::stderr());
 
     let response =
         Connection::open().and_then(|mut connection| connection.send(&BrokerRequest::run(request)));
-    // The target and the Broker's copies are gone once the response arrives;
-    // closing ours lets the relays reach end of file.
+    // The target and the Broker's copies are gone once the response arrives.
+    // If the target never started, its input is kept for the retry.
+    let mut child_stdin = std::fs::File::from(child_stdin);
+    match &response {
+        Ok(BrokerResponse::Ok(BrokerPayload::Run(RunResult::ApprovalRequired { .. }))) => {
+            input.reclaim(&mut child_stdin)
+        }
+        _ => input.detach(),
+    }
+    // Closing ours lets the relays reach end of file.
     drop((child_stdin, child_stdout, child_stderr));
     let _ = stdout.join();
     let _ = stderr.join();
@@ -100,6 +108,7 @@ fn status(ticket: &ApprovalTicket) -> Result<RequestState, ClientError> {
 fn wait_and_retry(
     request: &RunRequest,
     tickets: &[ApprovalTicket],
+    stdin: &StdinRelay,
 ) -> Result<RunResult, ClientError> {
     eprintln!("Ask Key: waiting for approval in the Ask Key window (up to 5 minutes). Keep this process running.");
     let deadline = Instant::now() + Limits::APPROVAL_LIFETIME + Duration::from_secs(5);
@@ -121,7 +130,7 @@ fn wait_and_retry(
             }
         }
         if all_approved {
-            return run_once(request);
+            return run_once(request, stdin);
         }
         if Instant::now() > deadline {
             return Err(ClientError::Broker(
@@ -145,12 +154,13 @@ pub fn run(options: RunOptions) -> i32 {
         caller_purpose: options.caller_purpose,
         streams: None,
     };
-    let mut result = run_once(&request);
+    let stdin = StdinRelay::new(std::io::stdin());
+    let mut result = run_once(&request, &stdin);
     if let (true, Ok(RunResult::ApprovalRequired { tickets, .. })) =
         (options.wait_for_approval, &result)
     {
         let tickets = tickets.clone();
-        result = wait_and_retry(&request, &tickets);
+        result = wait_and_retry(&request, &tickets, &stdin);
     }
     match result {
         Ok(RunResult::Exited(code)) => code,

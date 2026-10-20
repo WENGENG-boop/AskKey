@@ -16,7 +16,10 @@ fn summary() -> ApprovalSummary {
 }
 
 fn binding() -> Binding {
-    vec![("id-1".into(), "rev-1".into())]
+    Binding {
+        credentials: vec![("id-1".into(), "rev-1".into())],
+        executable: r"C:\Program Files\Git\cmd\git.exe".into(),
+    }
 }
 
 fn pending(approvals: &Approvals, operation: &str) -> ApprovalTicket {
@@ -168,7 +171,8 @@ fn retention_keeps_active_operations() {
     for index in 0..Limits::MAX_RETAINED_OPERATIONS {
         let id = format!("op-{index}");
         assert_eq!(approvals.begin(&id, "d").unwrap(), Begin::New);
-        approvals.start(&id);
+        approvals.start(&id, binding());
+        approvals.consume(&id).unwrap();
         approvals.complete(&id, 0);
     }
     assert_eq!(approvals.begin("fresh", "d").unwrap(), Begin::New);

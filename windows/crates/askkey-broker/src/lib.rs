@@ -81,8 +81,9 @@ pub trait CredentialProvider: Send + Sync + 'static {
 
 pub trait ApprovalPresenter: Send + Sync + 'static {
     /// Called when the set of pending approvals changes, with how many are
-    /// now pending.
-    fn pending_changed(&self, pending: usize);
+    /// now pending. `new_request` is true when a request was just added, so
+    /// the presenter can come forward whatever the earlier count was.
+    fn pending_changed(&self, pending: usize, new_request: bool);
 }
 
 /// Shared Broker state. Clone the `Arc` into the server and the App.
@@ -150,7 +151,12 @@ impl Broker {
 
     pub(crate) fn notify(&self) {
         self.presenter
-            .pending_changed(self.approvals.pending().len());
+            .pending_changed(self.approvals.pending().len(), false);
+    }
+
+    pub(crate) fn notify_new_request(&self) {
+        self.presenter
+            .pending_changed(self.approvals.pending().len(), true);
     }
 }
 

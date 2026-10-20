@@ -126,13 +126,15 @@ impl CredentialProvider for FakeProvider {
     }
 }
 
+/// Counts calls, and records each pending count and new-request flag.
 #[derive(Default)]
-struct CountingPresenter(AtomicUsize, Mutex<Vec<usize>>);
+struct CountingPresenter(AtomicUsize, Mutex<Vec<usize>>, Mutex<Vec<bool>>);
 
 impl ApprovalPresenter for CountingPresenter {
-    fn pending_changed(&self, pending: usize) {
+    fn pending_changed(&self, pending: usize, new_request: bool) {
         self.0.fetch_add(1, Ordering::SeqCst);
         self.1.lock().unwrap().push(pending);
+        self.2.lock().unwrap().push(new_request);
     }
 }
 
@@ -355,8 +357,10 @@ async fn expiry_is_reported_before_the_next_approval() {
     let _ = run(&broker, exit_with("SYNTH_CODE", "op-old", &["Code"])).await;
     broker.approvals.expire_all_for_test();
     let _ = run(&broker, exit_with("SYNTH_CODE", "op-new", &["Code"])).await;
-    // 1 pending, then 0 after the expiry, then 1 again: the window is raised.
+    // 1 pending, then 0 after the expiry, then 1 again: the window is raised
+    // for each new request, whatever the earlier count was.
     assert_eq!(*presenter.1.lock().unwrap(), vec![1, 0, 1]);
+    assert_eq!(*presenter.2.lock().unwrap(), vec![true, false, true]);
 }
 
 #[tokio::test]
@@ -530,3 +534,6 @@ async fn serves_over_a_private_pipe() {
     assert_eq!(response.1, exited(23));
     server.abort();
 }
+
+#[path = "launch_tests.rs"]
+mod launch;

@@ -6,6 +6,7 @@
 //! identical retry continues an operation; changed content is rejected.
 
 use std::collections::{HashMap, VecDeque};
+use std::path::PathBuf;
 use std::sync::{Mutex, MutexGuard};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
@@ -54,6 +55,9 @@ enum Status {
     Resolving,
     AwaitingApproval,
     Approved,
+    /// A retry claimed the approval, or an Allow run was authorized; the
+    /// final launch boundary still has to consume it.
+    Claimed,
     Running,
     Completed(i32),
     Refused(RequestState),
@@ -64,14 +68,18 @@ impl Status {
     fn is_active(self) -> bool {
         matches!(
             self,
-            Self::Resolving | Self::AwaitingApproval | Self::Approved | Self::Running
+            Self::Resolving
+                | Self::AwaitingApproval
+                | Self::Approved
+                | Self::Claimed
+                | Self::Running
         )
     }
 
     fn request_state(self) -> RequestState {
         match self {
             Self::Resolving | Self::AwaitingApproval => RequestState::Pending,
-            Self::Approved => RequestState::Approved,
+            Self::Approved | Self::Claimed => RequestState::Approved,
             Self::Running => RequestState::Consumed,
             Self::Completed(_) => RequestState::Completed,
             Self::Refused(state) => state,
@@ -87,8 +95,13 @@ struct Ticket {
     summary: ApprovalSummary,
 }
 
-/// The credential IDs and revisions an approval showed, in request order.
-pub(crate) type Binding = Vec<(String, String)>;
+/// What an authorization covers: the credential IDs and revisions it was
+/// decided on, in request order, and the executable the target resolved to.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub(crate) struct Binding {
+    pub credentials: Vec<(String, String)>,
+    pub executable: PathBuf,
+}
 
 struct Operation {
     digest: String,
@@ -159,7 +172,7 @@ impl State {
             if expired
                 && matches!(
                     operation.status,
-                    Status::AwaitingApproval | Status::Approved
+                    Status::AwaitingApproval | Status::Approved | Status::Claimed
                 )
             {
                 if operation.status == Status::AwaitingApproval {
@@ -190,7 +203,7 @@ impl State {
                 digest: digest.to_owned(),
                 status: Status::Resolving,
                 ticket: None,
-                binding: Vec::new(),
+                binding: Binding::default(),
             },
         );
         self.order.push_back(operation_id.to_owned());
@@ -242,7 +255,7 @@ impl Approvals {
         }
         match operation.status {
             Status::Approved => {
-                operation.status = Status::Running;
+                operation.status = Status::Claimed;
                 Ok(Begin::Approved(operation.binding.clone()))
             }
             Status::AwaitingApproval => {
@@ -257,15 +270,33 @@ impl Approvals {
             }
             Status::Completed(code) => Ok(Begin::Completed(code)),
             Status::Unknown => Ok(Begin::OutcomeUnknown),
-            Status::Resolving | Status::Running | Status::Refused(_) => {
+            Status::Resolving | Status::Claimed | Status::Running | Status::Refused(_) => {
                 Err(ErrorCode::RequestRejected)
             }
         }
     }
 
-    /// The reserved operation needs no approval and starts now.
-    pub(crate) fn start(&self, operation_id: &str) {
-        self.lock().set(operation_id, Status::Running);
+    /// The reserved operation needs no approval; it launches once the final
+    /// boundary consumes it with [`Approvals::consume`].
+    pub(crate) fn start(&self, operation_id: &str, binding: Binding) {
+        let mut state = self.lock();
+        if let Some(operation) = state.operations.get_mut(operation_id) {
+            operation.status = Status::Claimed;
+            operation.binding = binding;
+        }
+    }
+
+    /// Called inside the final launch boundary. Fails if the claimed
+    /// authorization was cancelled or expired in the meantime.
+    pub(crate) fn consume(&self, operation_id: &str) -> Result<(), ErrorCode> {
+        let mut state = self.lock();
+        match state.operations.get_mut(operation_id) {
+            Some(operation) if operation.status == Status::Claimed => {
+                operation.status = Status::Running;
+                Ok(())
+            }
+            _ => Err(ErrorCode::RequestRejected),
+        }
     }
 
     /// Creates the approval ticket for a reserved operation.
@@ -345,7 +376,7 @@ impl Approvals {
         let operation = state.by_ticket(request_id, capability)?;
         if matches!(
             operation.status,
-            Status::AwaitingApproval | Status::Approved
+            Status::AwaitingApproval | Status::Approved | Status::Claimed
         ) {
             operation.status = Status::Refused(RequestState::Cancelled);
         }
@@ -412,7 +443,7 @@ impl Approvals {
         for operation in state.operations.values_mut() {
             if matches!(
                 operation.status,
-                Status::AwaitingApproval | Status::Approved
+                Status::AwaitingApproval | Status::Approved | Status::Claimed
             ) {
                 operation.status = Status::Refused(RequestState::Cancelled);
                 cancelled += 1;

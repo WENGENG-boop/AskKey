@@ -135,14 +135,21 @@ pub fn display_name(raw: &str) -> Result<String, VaultError> {
 
 /// Key used for uniqueness: NFC plus full case folding, so `Straße`,
 /// `STRASSE` and `strasse` are one name. Lowercasing, uppercasing and
-/// lowercasing again reaches the same equivalence classes as Unicode full
-/// case folding without another dependency.
+/// lowercasing again reaches the equivalence classes of Unicode full case
+/// folding (CaseFolding.txt, statuses C and F) without another dependency.
+/// The one character where the round trip differs is dotless `ı`, which has
+/// no folding (`I` folds to `i`, never to `ı`), so it is kept as is.
 pub fn normalized_name(display: &str) -> String {
+    let round_trip = |c: char| -> Vec<char> {
+        if c == '\u{131}' {
+            return vec![c];
+        }
+        c.to_uppercase().flat_map(char::to_lowercase).collect()
+    };
     display
         .nfc()
         .flat_map(char::to_lowercase)
-        .flat_map(char::to_uppercase)
-        .flat_map(char::to_lowercase)
+        .flat_map(round_trip)
         .nfc()
         .collect()
 }
@@ -231,6 +238,11 @@ mod tests {
         assert_eq!(normalized_name("Stra\u{df}e"), normalized_name("STRASSE"));
         assert_eq!(normalized_name("STRA\u{1e9e}E"), normalized_name("strasse"));
         assert_eq!(normalized_name("\u{fb01}le"), normalized_name("FILE"));
+        // Full case folding keeps dotless ı apart from i and I.
+        assert_ne!(normalized_name("\u{131}"), normalized_name("i"));
+        assert_ne!(normalized_name("\u{131}"), normalized_name("I"));
+        assert_eq!(normalized_name("\u{3c2}"), normalized_name("\u{3a3}"));
+        assert_eq!(normalized_name("\u{17f}"), normalized_name("S"));
         assert!(display_name("   ").is_err());
         assert_eq!(display_name("  NAS  ").unwrap(), "NAS");
     }

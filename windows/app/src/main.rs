@@ -6,7 +6,6 @@ mod clients;
 mod commands;
 mod provider;
 
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
 use askkey_broker::{ApprovalPresenter, Broker};
@@ -31,14 +30,12 @@ pub struct AppState {
 /// Brings the App forward when an agent asks for approval.
 struct WindowPresenter {
     app: AppHandle,
-    previous: AtomicUsize,
 }
 
 impl ApprovalPresenter for WindowPresenter {
-    fn pending_changed(&self, pending: usize) {
+    fn pending_changed(&self, pending: usize, new_request: bool) {
         let _ = self.app.emit("approvals-changed", pending);
-        let previous = self.previous.swap(pending, Ordering::SeqCst);
-        if pending > previous {
+        if new_request {
             if let Some(window) = self.app.get_webview_window("main") {
                 let _ = window.show();
                 let _ = window.unminimize();
@@ -61,6 +58,19 @@ fn fatal(message: &str) -> ! {
         );
     }
     std::process::exit(1);
+}
+
+/// Finds the process serving the Broker pipe and brings its window forward.
+/// Only that process's own "Ask Key" window is touched.
+fn activate_running(pipe_name: &str) -> bool {
+    let Ok(pipe) = std::fs::OpenOptions::new().read(true).open(pipe_name) else {
+        return false;
+    };
+    let Ok(pid) = askkey_system::pipe_server_process_id(&pipe) else {
+        return false;
+    };
+    drop(pipe);
+    askkey_system::activate_window(pid, "Ask Key")
 }
 
 fn show_main(app: &AppHandle) {
@@ -89,13 +99,17 @@ fn main() {
             let provider = Arc::new(VaultProvider::new(vault.clone()));
             let presenter = Arc::new(WindowPresenter {
                 app: app.handle().clone(),
-                previous: AtomicUsize::new(0),
             });
             let broker = Broker::new(provider.clone(), presenter);
             let listener = tauri::async_runtime::block_on(async {
                 askkey_broker::bind(&pipe_name)
             })
             .unwrap_or_else(|_| {
+                // Started again, for example by `askkey open`: show the
+                // running App instead.
+                if activate_running(&pipe_name) {
+                    std::process::exit(0);
+                }
                 fatal("Ask Key is already running. Look for its icon in the notification area.")
             });
             let serving = broker.clone();

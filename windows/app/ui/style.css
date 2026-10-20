@@ -310,6 +310,16 @@ button.danger:hover {
   font-weight: 600;
 }
 
+.program,
+.purpose {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: baseline;
+  margin: 10px 0 0;
+  word-break: break-all;
+}
+
 .timer {
   font-variant-numeric: tabular-nums;
 }

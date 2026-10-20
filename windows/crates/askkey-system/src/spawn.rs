@@ -17,7 +17,7 @@ use windows_sys::Win32::System::JobObjects::{
     SetInformationJobObject, TerminateJobObject, JOBOBJECT_EXTENDED_LIMIT_INFORMATION,
     JOB_OBJECT_LIMIT_DIE_ON_UNHANDLED_EXCEPTION, JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
 };
-use windows_sys::Win32::System::Pipes::CreatePipe;
+use windows_sys::Win32::System::Pipes::{CreatePipe, PeekNamedPipe};
 use windows_sys::Win32::System::Threading::{
     CreateProcessW, DeleteProcThreadAttributeList, GetCurrentProcess, GetExitCodeProcess,
     InitializeProcThreadAttributeList, OpenProcess, ResumeThread, UpdateProcThreadAttribute,
@@ -104,6 +104,25 @@ pub fn anonymous_pipe() -> io::Result<(OwnedHandle, OwnedHandle)> {
             OwnedHandle::from_raw_handle(write),
         )
     })
+}
+
+/// Bytes waiting in a pipe's read end, without reading or blocking.
+pub fn pipe_bytes_available(read: &impl AsRawHandle) -> io::Result<usize> {
+    let mut available = 0u32;
+    let ok = unsafe {
+        PeekNamedPipe(
+            read.as_raw_handle(),
+            ptr::null_mut(),
+            0,
+            ptr::null_mut(),
+            &mut available,
+            ptr::null_mut(),
+        )
+    };
+    if ok == 0 {
+        return Err(last_error());
+    }
+    Ok(available as usize)
 }
 
 pub struct SpawnSpec<'a> {

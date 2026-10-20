@@ -45,6 +45,10 @@ pub enum VaultError {
     Invalid(&'static str),
     #[error("a credential with this name already exists")]
     NameTaken,
+    /// Two credentials from the first preview fold to the same name; neither
+    /// is matched until one is renamed or deleted.
+    #[error("more than one credential has this name; rename one of them in Ask Key")]
+    AmbiguousName,
     #[error("credential not found")]
     NotFound,
 }
@@ -209,7 +213,8 @@ impl Vault {
     }
 
     /// Moves rows keyed by the first preview's lowercasing to full case
-    /// folding. A row whose folded name now collides keeps its old key.
+    /// folding. A row whose folded name now collides keeps its old key; see
+    /// [`Vault::legacy_matches`] for how lookups and writes treat it.
     fn rekey_legacy_names(&self) -> Result<()> {
         for mut raw in self.raw_rows()? {
             let meta = self.open_meta(&raw)?;
@@ -254,18 +259,56 @@ impl Vault {
         self.decode(&self.raw(id)?)
     }
 
-    /// Looks a credential up by display name (NFC, case-insensitive).
+    /// Rows still on the first preview's key whose folded name is `folded`,
+    /// other than `except`. They exist only when re-keying collided, and
+    /// they take part in every lookup and uniqueness check, so a name never
+    /// silently resolves to the other credential.
+    fn legacy_matches(&self, folded: &str, except: Option<&str>) -> Result<Vec<Credential>> {
+        let mut matches = Vec::new();
+        for raw in self.raw_rows()? {
+            let credential = self.decode(&raw)?;
+            let name = normalized_name(&credential.name);
+            let legacy = raw.name_key != self.keys.name_key(&name);
+            if legacy && name == folded && except != Some(credential.id.as_str()) {
+                matches.push(credential);
+            }
+        }
+        Ok(matches)
+    }
+
+    fn ensure_name_free(&self, name: &str, except: Option<&str>) -> Result<()> {
+        if self
+            .legacy_matches(&normalized_name(name), except)?
+            .is_empty()
+        {
+            Ok(())
+        } else {
+            Err(VaultError::NameTaken)
+        }
+    }
+
+    /// Looks a credential up by display name (NFC, full case folding). A name
+    /// that more than one credential folds to matches none of them.
     pub fn find_by_name(&self, name: &str) -> Result<Option<Credential>> {
-        let key = self.keys.name_key(&normalized_name(&display_name(name)?));
+        let folded = normalized_name(&display_name(name)?);
         let raw = self
             .connection()
             .query_row(
                 &format!("SELECT {COLUMNS} FROM credentials WHERE name_key = ?1"),
-                [key],
+                [self.keys.name_key(&folded)],
                 RawRow::from_row,
             )
             .optional()?;
-        raw.map(|raw| self.decode(&raw)).transpose()
+        let mut found: Vec<Credential> = raw
+            .map(|raw| self.decode(&raw))
+            .transpose()?
+            .into_iter()
+            .collect();
+        found.extend(self.legacy_matches(&folded, None)?);
+        match found.len() {
+            0 | 1 => Ok(found.pop()),
+            _ => Err(VaultError::AmbiguousName),
+        }
     }
 
     fn seal_row(
@@ -356,6 +399,7 @@ impl Vault {
             group: clean_group(new.group)?,
             components: specs,
         };
+        self.ensure_name_free(&meta.name, None)?;
         let id = uuid::Uuid::new_v4().to_string();
         let raw = self.seal_row(&id, &meta, &values, new.permission, new.expires_at, now())?;
         self.write_row(&raw, true)?;
@@ -397,7 +441,8 @@ impl Vault {
             group: clean_group(update.group)?,
             components: specs,
         };
-        let raw = self.seal_row(
+        self.ensure_name_free(&meta.name, Some(id))?;
+        let mut raw = self.seal_row(
             id,
             &meta,
             &values,
@@ -405,8 +450,21 @@ impl Vault {
             update.expires_at,
             current.created_at,
         )?;
+        self.keep_legacy_key(&mut raw, &meta.name)?;
         self.write_row(&raw, false)?;
         self.get(id)
+    }
+
+    /// A row left on the first preview's key after a collision keeps that
+    /// key while it still matches `name`, so it can be edited without first
+    /// being renamed.
+    fn keep_legacy_key(&self, raw: &mut RawRow, name: &str) -> Result<()> {
+        let stored = self.raw(&raw.id)?.name_key;
+        if stored == self.keys.name_key(&legacy_normalized_name(name)) {
+            raw.name_key = stored;
+            raw.sign(&self.keys);
+        }
+        Ok(())
     }
 
     pub fn set_permission(&self, id: &str, permission: Permission) -> Result<Credential> {
@@ -418,7 +476,7 @@ impl Vault {
             group: current.group,
             components: current.components,
         };
-        let raw = self.seal_row(
+        let mut raw = self.seal_row(
             id,
             &meta,
             &values,
@@ -426,6 +484,7 @@ impl Vault {
             current.expires_at,
             current.created_at,
         )?;
+        self.keep_legacy_key(&mut raw, &meta.name)?;
         self.write_row(&raw, false)?;
         self.get(id)
     }

@@ -8,6 +8,7 @@ mod client;
 mod guide;
 mod mcp;
 mod run;
+mod stdin;
 
 use askkey_protocol::{BrokerPayload, BrokerRequest};
 

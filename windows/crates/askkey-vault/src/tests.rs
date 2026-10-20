@@ -264,10 +264,79 @@ fn rows_keyed_by_the_first_preview_are_rekeyed() {
         raw.name_key = vault.keys.name_key(&legacy_normalized_name("Stra\u{df}e"));
         raw.sign(&vault.keys);
         vault.write_row(&raw, false).unwrap();
-        assert!(vault.find_by_name("STRASSE").unwrap().is_none());
+        // Found through its legacy key even before re-keying.
+        assert_eq!(vault.find_by_name("STRASSE").unwrap().unwrap().id, id);
         id
     };
     let vault = Vault::open(directory.path(), NAMESPACE).unwrap();
     assert_eq!(vault.find_by_name("STRASSE").unwrap().unwrap().id, id);
+    assert_eq!(
+        vault.raw(&id).unwrap().name_key,
+        vault.keys.name_key(&normalized_name("STRASSE"))
+    );
     assert_eq!(vault.list().unwrap().len(), 1);
+}
+
+/// The first preview stored `Straße` and `STRASSE` as two names. Re-keying
+/// cannot merge them, so neither may answer for the other.
+#[test]
+fn colliding_legacy_names_resolve_to_neither() {
+    let directory = tempfile::tempdir().unwrap();
+    let (legacy, current) = {
+        let vault = Vault::open(directory.path(), NAMESPACE).unwrap();
+        let current = vault.create(synthetic("STRASSE")).unwrap().id;
+        // Written the way the first preview did, beside the new row.
+        let legacy = "legacy-row".to_owned();
+        let meta = model::StoredMeta {
+            name: "Stra\u{df}e".into(),
+            usage_instructions: String::new(),
+            group: None,
+            components: vec![ComponentSpec {
+                name: "user".into(),
+                environment_variable: Some("SYNTH_USER".into()),
+            }],
+        };
+        let values = [Zeroizing::new("synthetic-user".to_owned())];
+        let mut raw = vault
+            .seal_row(&legacy, &meta, &values, Permission::Ask, None, now())
+            .unwrap();
+        raw.name_key = vault.keys.name_key(&legacy_normalized_name("Stra\u{df}e"));
+        raw.sign(&vault.keys);
+        vault.write_row(&raw, true).unwrap();
+        (legacy, current)
+    };
+    let vault = Vault::open(directory.path(), NAMESPACE).unwrap();
+    assert_eq!(vault.list().unwrap().len(), 2);
+    for name in ["Stra\u{df}e", "STRASSE", "strasse"] {
+        assert!(matches!(
+            vault.find_by_name(name),
+            Err(VaultError::AmbiguousName)
+        ));
+    }
+    assert!(matches!(
+        vault.create(synthetic("Strasse")),
+        Err(VaultError::NameTaken)
+    ));
+    // The legacy row can still be edited and re-permissioned.
+    vault.set_permission(&legacy, Permission::Hidden).unwrap();
+    let update = CredentialUpdate {
+        name: "Stra\u{df}e".into(),
+        usage_instructions: "Edited.".into(),
+        group: None,
+        components: vec![component("user", Some("SYNTH_USER"), None)],
+        expires_at: None,
+    };
+    vault.update(&legacy, update.clone()).unwrap();
+    // Renaming one of them resolves the collision.
+    vault
+        .update(
+            &legacy,
+            CredentialUpdate {
+                name: "Old NAS".into(),
+                ..update
+            },
+        )
+        .unwrap();
+    assert_eq!(vault.find_by_name("strasse").unwrap().unwrap().id, current);
+    assert_eq!(vault.find_by_name("old nas").unwrap().unwrap().id, legacy);
 }

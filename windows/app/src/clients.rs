@@ -58,12 +58,16 @@ fn json_configured(path: &Path, helper: &Path) -> bool {
     let Ok(value) = serde_json::from_str::<Value>(&text) else {
         return false;
     };
+    let args: Option<Vec<&str>> = value
+        .pointer("/mcpServers/askkey/args")
+        .and_then(Value::as_array)
+        .and_then(|args| args.iter().map(Value::as_str).collect());
     same_path(
         value
             .pointer("/mcpServers/askkey/command")
             .and_then(Value::as_str),
         helper,
-    )
+    ) && args.as_deref() == Some(&["mcp"][..])
 }
 
 fn toml_configured(path: &Path, helper: &Path) -> bool {
@@ -73,14 +77,19 @@ fn toml_configured(path: &Path, helper: &Path) -> bool {
     let Ok(document) = text.parse::<toml_edit::DocumentMut>() else {
         return false;
     };
+    let entry = document
+        .get("mcp_servers")
+        .and_then(|servers| servers.get("askkey"));
+    let args: Option<Vec<&str>> = entry
+        .and_then(|entry| entry.get("args"))
+        .and_then(|args| args.as_array())
+        .and_then(|args| args.iter().map(|arg| arg.as_str()).collect());
     same_path(
-        document
-            .get("mcp_servers")
-            .and_then(|servers| servers.get("askkey"))
+        entry
             .and_then(|entry| entry.get("command"))
             .and_then(|command| command.as_str()),
         helper,
-    )
+    ) && args.as_deref() == Some(&["mcp"][..])
 }
 
 fn manual(client: &str, helper: &Path) -> String {
@@ -246,6 +255,43 @@ mod tests {
         assert_eq!(value["keep"], 1);
         assert!(json_configured(&path, helper));
         assert!(directory.join("mcp.json.askkey-backup").exists());
+        fs::remove_dir_all(&directory).unwrap();
+    }
+
+    #[test]
+    fn status_requires_the_mcp_argument() {
+        let directory =
+            std::env::temp_dir().join(format!("askkey-client-args-{}", std::process::id()));
+        fs::create_dir_all(&directory).unwrap();
+        let helper = Path::new(r"C:\Program Files\Ask Key\askkey.exe");
+        let json = directory.join("mcp.json");
+        let entry = |args: &str| {
+            format!(
+                r#"{{"mcpServers":{{"askkey":{{"command":{},"args":{args}}}}}}}"#,
+                json!(helper.to_string_lossy())
+            )
+        };
+        fs::write(&json, entry(r#"["mcp"]"#)).unwrap();
+        assert!(json_configured(&json, helper));
+        fs::write(&json, entry(r#"["run"]"#)).unwrap();
+        assert!(!json_configured(&json, helper));
+        fs::write(&json, entry("[]")).unwrap();
+        assert!(!json_configured(&json, helper));
+
+        let toml = directory.join("config.toml");
+        let command = toml_edit::value(helper.to_string_lossy().as_ref());
+        fs::write(
+            &toml,
+            format!("[mcp_servers.askkey]\ncommand = {command}\nargs = [\"mcp\"]\n"),
+        )
+        .unwrap();
+        assert!(toml_configured(&toml, helper));
+        fs::write(
+            &toml,
+            format!("[mcp_servers.askkey]\ncommand = {command}\n"),
+        )
+        .unwrap();
+        assert!(!toml_configured(&toml, helper));
         fs::remove_dir_all(&directory).unwrap();
     }
 

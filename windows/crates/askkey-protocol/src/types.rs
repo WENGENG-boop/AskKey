@@ -260,6 +260,11 @@ pub enum ErrorCode {
     /// files are refused because `cmd.exe` parsing defeats argument quoting.
     #[error("target rejected: name an existing .exe or .com program; run batch files through an interpreter you choose")]
     TargetRejected,
+    /// The answer exceeds the 64 KiB frame limit, as on macOS. For the
+    /// catalog, the person can hide credentials or shorten their usage
+    /// instructions.
+    #[error("the response exceeds Ask Key's 64 KiB limit; hide unused credentials or shorten their usage instructions in Ask Key")]
+    ResponseTooLarge,
 }
 
 #[cfg(test)]

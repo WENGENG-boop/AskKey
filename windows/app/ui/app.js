@@ -171,31 +171,40 @@ function remaining(expiresAt) {
   return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
 }
 
+// The caller name and purpose are typed by the agent; mark them wherever
+// they appear.
+function unverified() {
+  return h("span", { class: "badge badge-warn", title: t("requests.unverified") }, t("requests.unverifiedBadge"));
+}
+
 function requestCard(request) {
-  const caller = request.callerName || t("requests.agent");
-  const details = h(
-    "details",
-    { class: "details" },
-    h("summary", {}, t("requests.details")),
-    h("dl", { class: "pairs" },
-      h("dt", {}, t("requests.program")), h("dd", { class: "mono" }, request.executable),
-      h("dt", {}, t("requests.caller")), h("dd", {}, request.callerName || "—"),
-      h("dt", {}, t("requests.purpose")), h("dd", {}, request.callerPurpose || "—"),
-    ),
-    h("p", { class: "muted small" }, t("requests.unverified")),
-  );
   const timer = h("span", { class: "timer", "data-expires": request.expiresAt }, remaining(request.expiresAt));
   return h(
     "article",
     { class: "card request" },
     h("header", { class: "request-head" },
-      h("span", { class: "caller" }, caller),
+      request.callerName
+        ? [h("span", { class: "caller" }, request.callerName), unverified()]
+        : h("span", { class: "caller" }, t("requests.agent")),
       h("span", { class: "muted" }, t("requests.wants")),
       h("span", { class: "spacer" }),
       h("span", { class: "muted small" }, t("requests.expires"), " ", timer),
     ),
+    // The program that will start, as the Broker resolved it; the command
+    // line below is what the agent typed.
+    h("p", { class: "program" },
+      h("span", { class: "chip-label" }, t("requests.program")),
+      h("span", { class: "mono" }, request.executable),
+    ),
     h("pre", { class: "command" }, request.commandLine),
     h("p", { class: "muted small mono" }, t("requests.in"), " ", request.workingDirectory),
+    request.callerPurpose
+      ? h("p", { class: "purpose" },
+          h("span", { class: "chip-label" }, t("requests.purpose")),
+          h("span", {}, request.callerPurpose),
+          unverified(),
+        )
+      : null,
     h("div", { class: "chips" },
       h("span", { class: "chip-label" }, t("requests.credentials")),
       request.credentialNames.map((name) => h("span", { class: "chip" }, name)),
@@ -206,7 +215,6 @@ function requestCard(request) {
           request.environmentVariables.map((name) => h("span", { class: "chip mono" }, name)),
         )
       : null,
-    details,
     h("footer", { class: "actions" },
       h("button", { type: "button", class: "secondary", onclick: () => decide(request.requestID, false) }, t("requests.deny")),
       h("button", { type: "button", class: "primary", onclick: () => decide(request.requestID, true) }, t("requests.approve")),

@@ -113,14 +113,15 @@ async fn write_response<W: AsyncWrite + Unpin>(
     writer.flush().await
 }
 
-/// An oversized or unencodable response becomes an internal error frame
-/// instead of a dropped connection.
-fn encode(response: &BrokerResponse) -> Vec<u8> {
-    match serde_json::to_vec(response) {
-        Ok(body) if body.len() <= Limits::MAX_FRAME_BYTES => body,
-        _ => serde_json::to_vec(&BrokerResponse::Error(ErrorCode::InternalError))
-            .expect("error encodes"),
-    }
+/// An oversized or unencodable response becomes an error frame instead of a
+/// dropped connection.
+pub(crate) fn encode(response: &BrokerResponse) -> Vec<u8> {
+    let code = match serde_json::to_vec(response) {
+        Ok(body) if body.len() <= Limits::MAX_FRAME_BYTES => return body,
+        Ok(_) => ErrorCode::ResponseTooLarge,
+        Err(_) => ErrorCode::InternalError,
+    };
+    serde_json::to_vec(&BrokerResponse::Error(code)).expect("error encodes")
 }
 
 async fn handle_connection(broker: Arc<Broker>, pipe: NamedPipeServer) -> io::Result<()> {
@@ -218,5 +219,32 @@ impl Broker {
             Ok(payload) => BrokerResponse::Ok(payload),
             Err(code) => BrokerResponse::Error(code),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use askkey_protocol::{CatalogItem, Delivery};
+
+    #[test]
+    fn oversized_catalog_reports_its_size() {
+        let item = |index: usize| CatalogItem {
+            credential_id: format!("id-{index}"),
+            name: format!("Synthetic {index}"),
+            usage_instructions: "x".repeat(1024),
+            group: None,
+            components: vec![askkey_protocol::CatalogComponent {
+                name: "token".into(),
+                delivery: Delivery::None,
+            }],
+            expired: false,
+        };
+        let response = BrokerResponse::Ok(BrokerPayload::Catalog {
+            credentials: (0..100).map(item).collect(),
+            groups: Vec::new(),
+        });
+        let decoded: BrokerResponse = serde_json::from_slice(&encode(&response)).unwrap();
+        assert_eq!(decoded, BrokerResponse::Error(ErrorCode::ResponseTooLarge));
     }
 }
